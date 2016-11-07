@@ -1,7 +1,9 @@
 import re
 from collections import defaultdict
 from random import randint
-from csv import writer
+from csv import writer, reader
+from itertools import izip
+
 
 word_tokenizer = re.compile(r"[\w\-']+|[,:;\.!\?\"]")
 
@@ -58,7 +60,7 @@ def count_bigrams(words, per_line=False):
 
 def graph_bigrams(bigram_count):
 
-    graph = defaultdict(lambda : defaultdict(int))
+    graph = defaultdict(lambda: defaultdict(int))
 
     for (node, edge), counts in bigram_count.iteritems():
 
@@ -94,6 +96,9 @@ def get_sentence(bigram_graph, previous=None, max_words=15, end_at=(u".",)):
 
                 rnd -= edge_count
 
+            if previous in end_at:
+                return sentence, sentence[-1]
+
     return sentence, sentence[-1]
 
 
@@ -123,3 +128,162 @@ def dump_graph(graph, target):
             for edge, count in edges.iteritems():
 
                 w.writerow((node, u'' if edge is None else edge, count))
+
+
+def load_graph(source):
+
+    graph = defaultdict(lambda: defaultdict(int))
+    with open(source, 'rb') as fh:
+
+        r = reader(fh)
+
+        for node, edge, count in r:
+
+            graph[node if node else None][edge if edge else None] = int(count)
+
+    return graph
+
+WOVELS = "aeiouyAEIOUY"
+CONSONANTS_PLUS = "QqWwRrTtPp'SsDdFfGgHhJjKkLlZzXxCcVvBbNnMm"
+
+
+def categorize_letters(word):
+
+    for l in word:
+
+        if l in WOVELS:
+            yield 1
+        elif l in CONSONANTS_PLUS:
+            yield 0
+        else:
+            yield -1
+
+GLUTENATED_CONSONANTS = defaultdict(bool)
+GLUTENATED_CONSONANTS[('s', 't')] = True
+GLUTENATED_CONSONANTS[('t', 'r')] = True
+GLUTENATED_CONSONANTS[('c', 'h')] = True
+GLUTENATED_CONSONANTS[('s', 'h')] = True
+GLUTENATED_CONSONANTS[('s', 'c')] = True
+GLUTENATED_CONSONANTS[('c', 'r')] = True
+GLUTENATED_CONSONANTS[('n', 'g')] = True
+GLUTENATED_CONSONANTS[('r', 'd')] = True
+GLUTENATED_CONSONANTS[('p', 'h')] = True
+GLUTENATED_CONSONANTS[('t', 'h')] = True
+
+
+def get_proto_morphemes(word):
+
+    if word is None:
+
+        yield tuple()
+
+    else:
+
+        morpheme_start = 0
+        morpheme_state = 0
+        prev_char = None
+        last_state_change = -1
+        prev_state = -1
+
+        for i, (val, cur_char) in enumerate(izip(categorize_letters(word), word)):
+
+            # yield val, cur_char, morpheme_state
+            if val < 0 and i != morpheme_start:
+
+                yield word[morpheme_start: i]
+                morpheme_start = i + 1
+                morpheme_state = 0
+            elif cur_char == prev_char or GLUTENATED_CONSONANTS[(prev_char, cur_char)]:
+                pass
+            elif val == 1 and morpheme_state < 1:
+                morpheme_state = 1
+            elif morpheme_state > 0 and val == 0:
+                morpheme_state += 1
+            elif morpheme_state > 1:
+                yield word[morpheme_start: last_state_change]
+                morpheme_start = last_state_change
+                morpheme_state = 1
+
+            prev_char = cur_char
+            if prev_state != morpheme_state:
+                last_state_change = i
+            prev_state = morpheme_state
+
+        if morpheme_start < len(word):
+            yield word[morpheme_start:]
+
+
+def get_morphemes(word):
+
+    proto = list(get_proto_morphemes(word))
+    if len(proto) > 1:
+        last = proto[-1]
+        for suffix in ('ing', 'es', "in'"):
+
+            if last.endswith(suffix):
+                l = len(suffix)
+                proto[-2] += proto[-1][:-l]
+                proto[-1] = proto[-1][-l:]
+
+        if proto[-1][-1] not in WOVELS and proto[-2][-1] in WOVELS:
+
+            try:
+                v = [l in WOVELS for l in proto[-1]].index(True)
+
+                proto[-2] += proto[-1][:v]
+                proto[-1] = proto[-1][v:]
+
+            except ValueError:
+                pass
+
+    return proto
+
+
+def get_morphmeme_dict(graph):
+
+    return {word: get_morphemes(word) for word in graph.keys()}
+
+
+def remove_singles_in_lex(lex):
+    for word in lex.keys():
+        if len(set(w.lower() for w in lex[word])) == 1:
+            del lex[word]
+
+
+def get_rhyme_lexicon(morpheme_dict, remove_singles=True):
+
+    lex = defaultdict(list)
+
+    for word, morphemes in morpheme_dict.iteritems():
+
+        if not morphemes:
+            continue
+
+        try:
+            lex[morphemes[-1].lower()].append(word)
+        except AttributeError:
+            pass
+
+    if remove_singles:
+        remove_singles_in_lex(lex)
+    return lex
+
+
+def get_alliteration_lexicon(morpheme_dict, remove_singles=True):
+
+    lex = defaultdict(list)
+
+    for word, morphemes in morpheme_dict.iteritems():
+
+        if not morphemes:
+            continue
+
+        try:
+            lex[morphemes[0].lower()].append(word)
+        except AttributeError:
+            pass
+
+    if remove_singles:
+        remove_singles_in_lex(lex)
+
+    return lex
