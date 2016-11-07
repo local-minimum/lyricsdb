@@ -1,3 +1,11 @@
+"""Functionality for crawling a site...
+
+Note: This module is meant as an illustration of how
+ scraping a site could be done. It might not be compatible
+ with the policies of said site. And such policies may matter
+ or not, depending on where in the world you live. So use
+ with care...
+"""
 import requests
 from itertools import product
 import re
