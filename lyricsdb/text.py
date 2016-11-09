@@ -254,7 +254,16 @@ def get_morphemes(word):
 
 def get_morphmeme_dict(graph):
 
-    return {word: get_morphemes(word) for word in graph.keys()}
+    morpheme_dict = {}
+
+    for node in graph:
+        if node not in morpheme_dict:
+            morpheme_dict[node] = get_morphemes(node)
+        for edge in graph[node]:
+            if edge not in morpheme_dict:
+                morpheme_dict[edge] = get_morphemes(edge)
+
+    return morpheme_dict
 
 
 def remove_singles_in_lex(lex):
