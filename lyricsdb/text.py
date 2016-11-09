@@ -69,6 +69,19 @@ def graph_bigrams(bigram_count):
     return graph
 
 
+def reverse_graph(word_graph):
+
+    graph = defaultdict(lambda: defaultdict(int))
+
+    for node in word_graph:
+
+        for edge in word_graph[node]:
+
+            graph[edge][node] += word_graph[node][edge]
+
+    return graph
+
+
 def get_sentence(bigram_graph, previous=None, max_words=15, end_at=(u".",)):
 
     sentence = []
